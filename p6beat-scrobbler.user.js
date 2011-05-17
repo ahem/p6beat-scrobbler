@@ -288,36 +288,27 @@
         return MD5(s + api_secret);
     }
 
-    function lastfm_get(data, callback) {
-        data.api_key = api_key;
-        data.api_sig = make_sig(data);
-        data.format = 'json';
-
-        GM_xmlhttpRequest({
-            method: 'GET',
-            url: 'http://ws.audioscrobbler.com/2.0/?' + qstr(data),
-            onload: function (res) {
-                callback(JSON.parse(res.responseText));
-            }
-        });
-    }
-
-    function lastfm_post(data, callback) {
+    function lastfm_req(http_method, data, callback) {
+        var url = 'http://ws.audioscrobbler.com/2.0/';
 
         data.api_key = api_key;
         data.api_sig = make_sig(data);
         data.format = 'json';
 
-        GM_xmlhttpRequest({
-            method: 'POST',
-            url: 'http://ws.audioscrobbler.com/2.0/',
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            data: qstr(data),
-            onload: function (res) {
-                callback(JSON.parse(res.responseText));
-            }
-        });
-            
+        var req = {
+            method: http_method,
+            url: url,
+            onload: function (res) { callback(JSON.parse(res.responseText)); }
+        };
+
+        if (http_method === 'POST') {
+            req.url = url + '?' + qstr(data);
+        } else {
+            req.headers = { "Content-Type": "application/x-www-form-urlencoded" };
+            req.data = qstr(data);
+        }
+
+        GM_xmlhttpRequest(req);
     }
 
     function get_session(callback) {
@@ -326,10 +317,10 @@
         if (session) {
             callback(JSON.parse(session));
         } else {
-            lastfm_get({method:'auth.gettoken'}, function (data) {
+            lastfm_req('GET', {method:'auth.gettoken'}, function (data) {
                 var popup = window.open("http://www.last.fm/api/auth/?api_key=" + api_key + "&token=" + data.token);
                 var t = setInterval(function () {
-                    lastfm_get({method:'auth.getSession', token: data.token}, function (data) {
+                    lastfm_req('GET', {method:'auth.getSession', token: data.token}, function (data) {
                         if (data.session) {
                             clearInterval(t);
                             GM_setValue("session", JSON.stringify(data.session));
@@ -344,7 +335,7 @@
     function scrobble(session, artist, track) {
         setStatus('scrobbling ' + artist);
 
-        lastfm_post({
+        lastfm_req('POST', {
             method: 'track.scrobble',
             artist: artist,
             track: track,
